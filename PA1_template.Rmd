@@ -1,25 +1,149 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research: Course Project 1"
+author: "Deon Jacobs"
+date: "16 July 2016"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
 
-## Loading and preprocessing the data
+##Loading and preprocessing the data
 
+```{r}
+  library(ggplot2)
+  library(dplyr)
+  
+  #set path where files are located
+  setwd("C:/Users/jacobs_d/Documents/R_work/Coursera_work/Reproducible Research/RepData_PeerAssessment1")
+  
+  #activity data filename
+  activityFile <- "activity.csv"
+  
+  #read csv file with activity data
+  activity <-read.csv(activityFile,header = TRUE)
+  
+  #convert date variable to date format
+  activity$date <- as.Date(activity$date,"%Y-%d-%d")
+  
+  #remove all the NA values from the imported activity dataframe
+  no_NAs <- activity[complete.cases(activity),]
+```
 
+##What is mean total number of steps taken per day?
 
-## What is mean total number of steps taken per day?
+###Calculate the total number of steps taken per day:
 
+```{r}
+  
+  #calculate the step total count per day
+  sumStepsPerDay <- group_by(no_NAs,date) %>% summarise(sum_steps=sum(steps))
+  
+  #generate histogram plot of the sum of the daily steps
+  g <- ggplot(sumStepsPerDay, aes(x=sum_steps))
+  
+  g + geom_histogram(binwidth=2500,colour="black") + 
+  scale_x_continuous(breaks = c(seq(0,35000,by=2500))) + theme_bw(base_family="Times")
+```
 
+###Mean and median of the total number of steps taken per day:  
+```{r}
+  #calculate the mean and median step count per day for all intervals
+  statsStepsPerDay <- round(summarise(sumStepsPerDay,Mean = mean(sum_steps), Median = median(sum_steps)),0)
+  #display daily mean values
+  knitr::kable(statsStepsPerDay)
+```
 
-## What is the average daily activity pattern?
+##What is the average daily activity pattern?  
 
+###Five minute interval vs. averaged daily step count across all days  
+```{r}
+  #Calculate average steps over the intervals for all days
+  fiveMinIntDailyAvg <- group_by(no_NAs,interval) %>% summarise(avg_steps=mean(steps))
+  
+  #Plot line time series view 
+  g <- ggplot(fiveMinIntDailyAvg,aes(x=interval,y=avg_steps))
+  g + geom_line(size=1.5) + scale_x_continuous(breaks = c(seq(0,2400,by=250))) + theme_bw(base_family="Times") +
+    labs(x="Interval",y="Average Steps All Days")
+```
 
+### Five minute interval which on average across all the days in the dataset contains the maximum number of steps
 
-## Imputing missing values
+```{r}
+  maxFiveMinInt <- fiveMinIntDailyAvg[fiveMinIntDailyAvg$avg_steps == max(fiveMinIntDailyAvg$avg_steps),]
+  knitr::kable(maxFiveMinInt)
+```
 
+##Imputing missing values  
 
+###Number of NA rows in the activity dataset:
 
-## Are there differences in activity patterns between weekdays and weekends?
+```{r}
+numOfNAs <- sum(is.na(activity$steps))
+dfNumNAs <- data.frame(numOfNAs)
+knitr::kable(dfNumNAs)
+```
+###Strategy for Imputing Missing Values  
+
+1. Calculate mean across all intervals
+2. Substitute NA step values with calculated interval means
+
+```{r}
+activityNew <- activity
+  NAs <- is.na(activityNew$steps)
+  avgInterval <- tapply(activityNew$steps, activityNew$interval, mean, na.rm=TRUE, simplify=TRUE)
+  activityNew$steps[NAs] <- avgInterval[as.character(activityNew$interval[NAs])]
+```
+3. Check if any NAs still exist in new activity dataset:
+
+```{r}
+numOfNAs <- sum(is.na(activityNew$steps))
+dfNumNewNA <- data.frame(numOfNAs)
+knitr::kable(dfNumNewNA)
+```
+###Calculate new mean average steps per day Histogram, Median and Mean values with New activity dataset
+```{r}
+  
+  #calculate the step total count per day
+  sumStepsPerDay <- group_by(activityNew,date) %>% summarise(sum_steps=sum(steps))
+  
+  #generate histogram plot of the sum of the daily steps
+  g <- ggplot(sumStepsPerDay, aes(x=sum_steps))
+  
+  g + geom_histogram(binwidth=2500,colour="black") + 
+  scale_x_continuous(breaks = c(seq(0,35000,by=2500))) + theme_bw(base_family="Times")
+```
+###Mean and median of the total number of steps taken per day:
+```{r}
+  #calculate the mean and median step count per day for all intervals
+  statsStepsPerDay <- round(summarise(sumStepsPerDay,Mean = mean(sum_steps), Median = median(sum_steps)),0)
+  #display daily mean values
+  knitr::kable(statsStepsPerDay)
+```
+
+###Effect of imputing missing values  
+
+1. Imputing missing values do alter the statistical results calculated from the activity data set. 
+2. By imputing missing values the mean value of the daily sum of steps increases, implying an increase in daily steps.
+
+##Are there differences in activity patterns between weekdays and weekends?
+
+###Create weeday clasiffication variable from new activity dataset
+
+```{r}
+activityDate <- mutate(activityNew, dayClass = ifelse(weekdays(date) == "Saturday" | weekdays(date) == "Sunday", "weekend", "weekday"))
+activityDate$dayClass <- as.factor(activityDate$dayClass)
+```
+###Panel plot of weekday vs. weekend 
+```{r}
+  #Calculate average steps over the intervals for all days
+  fiveMinIntDailyAvg <- group_by(activityDate,interval,dayClass) %>% summarise(avg_steps=mean(steps))
+  
+  #Plot line time series view 
+  g <- ggplot(fiveMinIntDailyAvg,aes(x=interval,y=avg_steps))
+  g + geom_line(size=1.5) + scale_x_continuous(breaks = c(seq(0,2400,by=250))) + theme_bw(base_family="Times") +
+    labs(x="Interval",y="Average Steps All Days") + facet_grid(dayClass~.)
+```  
+
+1. A clear difference in weekday vs. weekend step count characteristic is observerd from the above panel plot.
